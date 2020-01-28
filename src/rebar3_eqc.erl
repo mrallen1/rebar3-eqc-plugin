@@ -10,6 +10,7 @@
          format_error/1]).
 
 %% Avoid including `eqc.hrl` (`-include_lib("eqc/include/eqc.hrl").`) unnecessarily, in order to ease build.
+%-include_lib("eqc/include/eqc.hrl").
 
 -define(PROVIDER, eqc).
 -define(DEPS, [compile]).
@@ -300,7 +301,7 @@ compile_tests(State, TestApps, Suites, RawOpts) ->
     copy_and_compile_test_dirs(State, RawOpts),
     F = fun(AppInfo) ->
                 Dir = proplists:get_value(dir, RawOpts),
-                NewState = replace_src_dirs(State, [Dir]),
+                NewState = inject_eqc_include(replace_src_dirs(State, [Dir])),
                 TopAppsPaths = app_paths(NewState),
                 rebar_utils:update_code(rebar_state:code_paths(NewState, all_deps)
                                         -- TopAppsPaths, [soft_purge]),
@@ -319,6 +320,12 @@ compile_tests(State, TestApps, Suites, RawOpts) ->
     code:add_pathsa(TopAppsPaths),
 
     {ok, test_set(TestApps, Suites)}.
+
+inject_eqc_include(State) ->
+    ErlOpts = rebar_state:get(State, erl_opts, []),
+    EqcPath = code:lib_dir(eqc),
+    EqcIncludePath = filename:join(EqcPath, "include"),
+    rebar_state:set(State, erl_opts, [{i,EqcPath}, {i,EqcIncludePath}|ErlOpts]).
 
 app_paths(State) ->
     Apps = rebar_state:project_apps(State),
@@ -342,7 +349,7 @@ copy(State, Target) ->
     end.
 
 compile_dir(State, Dir) ->
-    NewState = replace_src_dirs(State, [Dir]),
+    NewState = inject_eqc_include(replace_src_dirs(State, [Dir])),
     BaseDir = rebar_dir:base_dir(State),
     ok = rebar_erlc_compiler:compile(rebar_state:opts(NewState),
                                      BaseDir,
